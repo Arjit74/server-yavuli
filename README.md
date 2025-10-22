@@ -1,6 +1,4 @@
-# Marketplace
-
-Project Structure Overview
+Basic Project Structure Overview
 
 Marketplace/
 ├── client/                      # Frontend (React + Tailwind)
