@@ -1,5 +1,6 @@
-Basic Project Structure Overview
+## Basic Project Structure Overview
 
+```bash
 Marketplace/
 ├── client/                      # Frontend (React + Tailwind)
 │   ├── public/                  # Static assets (favicon, index.html)
