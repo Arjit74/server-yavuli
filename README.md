@@ -1,46 +1,39 @@
-## Basic Project Structure Overview
-
+## Basic Backened Structure Overview
 ```bash
-Marketplace/
-├── client/                      # Frontend (React + Tailwind)
-│   ├── public/                  # Static assets (favicon, index.html)
-│   ├── src/
-│   │   ├── assets/              # Images, icons
-│   │   ├── components/          # Reusable UI components
-│   │   ├── pages/               # Page-level views (Home, Profile, Listing)
-│   │   ├── context/             # React context providers (auth, theme)
-│   │   ├── hooks/               # Custom React hooks (useAuth, useFetch)
-│   │   ├── services/            # API calls (connects to backend routes)
-│   │   ├── styles/              # Tailwind configurations or global styles
-│   │   ├── App.jsx              # Main app entry
-│   │   ├── main.jsx             # ReactDOM render file
-│   │   └── router.jsx           # Route definitions via react-router-dom
-│   ├── tailwind.config.js       # Tailwind setup
-│   ├── postcss.config.js        # PostCSS setup
-│   ├── package.json             # Frontend dependencies
-│   └── vite.config.js           # Vite config for fast development
+Server/                          # Root directory
+├── src/                         # Source code
+│   ├── config/                  # Configuration files
+│   │   - Supabase credentials
+│   │   - Environment variables
+│   │   - JWT (JSON Web Token) settings
+│   │
+│   ├── routes/                  # API endpoints
+│   │   - auth.routes.js        # Authentication routes
+│   │   - listings.routes.js    # Property listing endpoints
+│   │   - chat.routes.js        # Real-time chat functionality
+│   │
+│   ├── controllers/            # Business logic
+│   │   - auth.controller.js    # Handle authentication logic
+│   │   - listing.controller.js # Handle property operations
+│   │   - chat.controller.js    # Manage chat functionality
+│   │
+│   ├── models/                 # Data layer
+│   │   - User.js              # User schema and methods
+│   │   - Listing.js           # Property listing schema
+│   │   - Message.js           # Chat message schema
+│   │
+│   ├── middleware/             # Request processors
+│   │   - auth.js              # JWT verification
+│   │   - cors.js              # CORS configuration
+│   │   - errorHandler.js      # Error handling
+│   │
+│   └── utils/                 # Helper functions
+│       - validators.js        # Input validation
+│       - sendEmail.js         # Email utilities
+│       - logger.js            # Logging utilities
 │
-├── server/                      # Backend (Node + Express + Supabase)
-│   ├── src/
-│   │   ├── config/              # Supabase keys, environment, JWT settings
-│   │   ├── routes/              # API route handlers (auth, listings, chat)
-│   │   ├── controllers/         # Business logic for each route group
-│   │   ├── models/              # Schema abstraction with Supabase/SQL tables
-│   │   ├── middleware/          # JWT verification, CORS, error handlers
-│   │   ├── utils/               # Helper functions (validators, sendEmail)
-│   │   └── app.js               # Express app root file
-│   ├── tests/                   # Backend tests (optional)
-│   ├── package.json             # Backend dependencies
-│   ├── .env.example             # Environment variables example
-│   └── server.js                # Entry point for production build
-│
-├── supabase/                    # Supabase structure
-│   ├── migrations/              # SQL schema migrations for database setup
-│   ├── functions/               # Edge functions (optional automation logic)
-│   ├── storage/                 # Uploaded assets folder map (Supabase storage)
-│   └── config.toml              # Supabase local config file
-│
-├── .gitignore                   # Ignore node_modules, .env, build artifacts
-├── README.md                    # Root documentation
-├── LICENSE                      # License (Proprietary or MIT)
-└── docker-compose.yml            # Optional container setup (if future scaling)
+├── tests/                   # Backend tests (optional)
+├── package.json             # Backend dependencies
+├── .env.example             # Environment variables example
+└── server.js                # Entry point for production build
+```
