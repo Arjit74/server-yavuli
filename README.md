@@ -1,4 +1,5 @@
 ## Basic Backened Structure Overview
+```bash
 Server/                          # Backend (Node + Express + Supabase)
 │   ├── src/
 │   │   ├── config/              # Supabase keys, environment, JWT settings
@@ -23,3 +24,4 @@ Server/                          # Backend (Node + Express + Supabase)
 ├── README.md                    # Root documentation
 ├── LICENSE                      # License (Proprietary or MIT)
 └── docker-compose.yml            # Optional container setup (if future scaling)
+```
