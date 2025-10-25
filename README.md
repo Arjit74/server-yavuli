@@ -8,9 +8,11 @@ Server/                          # Root directory
 │   │   - JWT (JSON Web Token) settings
 │   │
 │   ├── routes/                  # API endpoints
-│   │   - auth.routes.js        # Authentication routes
-│   │   - listings.routes.js    # Property listing endpoints
-│   │   - chat.routes.js        # Real-time chat functionality
+│   │   - auth.js        # Authentication routes
+│   │   - listings.js    # Property listing endpoints
+│   │   - chat.js        # Real-time chat functionality
+│   │   - payments.js        
+│   │   - users.js        
 │   │
 │   ├── controllers/            # Business logic
 │   │   - auth.controller.js    # Handle authentication logic
