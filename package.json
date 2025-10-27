@@ -16,7 +16,6 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0"
   },
-  "devDependencies": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Yavuli/server-yavuli.git"

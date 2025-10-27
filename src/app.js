@@ -14,6 +14,7 @@ const authRoutes = require('./routes/auth');
 const listingsRoutes = require('./routes/listings');
 const chatRoutes = require('./routes/chat');
 const paymentsRoutes = require('./routes/payments.js');
+const reportsRoutes = require('./routes/reports');
 const usersRoutes = require('./routes/users');
 
 //use routes
@@ -22,7 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/payments', paymentsRoutes);
-
+app.use('/api/reports', reportsRoutes);
 
 //routes
 app.get('/',(req,res)=>{
@@ -47,7 +48,8 @@ app.get('/api', (req, res) => {
       listings: '/api/listings',
       chat: '/api/chat',
       payments: '/api/payments',
-      users: '/api/users'
+      users: '/api/users',
+      reports: '/api/reports'
     }
   });
 });
