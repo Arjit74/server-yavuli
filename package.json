@@ -1,27 +1,32 @@
 {
-  "name": "yavuli-backened",
+  "name": "yavuli-server",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Backend server for Yavuli app - includes authentication, property listings, chat, and Supabase integration.",
+  "main": "src/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "keep-alive": "node src/keep-alive.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["express", "supabase", "backend", "yavuli", "api"],
+  "author": "Arjit Sharma",
   "license": "ISC",
-  "description": "```bash\r Server/                          # Root directory\r ├── src/                         # Source code\r │   ├── config/                  # Configuration files\r │   │   - Supabase credentials\r │   │   - Environment variables\r │   │   - JWT (JSON Web Token) settings\r │   │\r │   ├── routes/                  # API endpoints\r │   │   - auth.routes.js        # Authentication routes\r │   │   - listings.routes.js    # Property listing endpoints\r │   │   - chat.routes.js        # Real-time chat functionality\r │   │\r │   ├── controllers/            # Business logic\r │   │   - auth.controller.js    # Handle authentication logic\r │   │   - listing.controller.js # Handle property operations\r │   │   - chat.controller.js    # Manage chat functionality\r │   │\r │   ├── models/                 # Data layer\r │   │   - User.js              # User schema and methods\r │   │   - Listing.js           # Property listing schema\r │   │   - Message.js           # Chat message schema\r │   │\r │   ├── middleware/             # Request processors\r │   │   - auth.js              # JWT verification\r │   │   - cors.js              # CORS configuration\r │   │   - errorHandler.js      # Error handling\r │   │\r │   └── utils/                 # Helper functions\r │       - validators.js        # Input validation\r │       - sendEmail.js         # Email utilities\r │       - logger.js            # Logging utilities\r │\r ├── tests/                   # Backend tests (optional)\r ├── package.json             # Backend dependencies\r ├── .env.example             # Environment variables example\r └── server.js                # Entry point for production build\r ```",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yavuli/server-yavuli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Yavuli/server-yavuli/issues"
+  },
+  "homepage": "https://github.com/Yavuli/server-yavuli#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Yavuli/server-yavuli.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Yavuli/server-yavuli/issues"
-  },
-  "homepage": "https://github.com/Yavuli/server-yavuli#readme"
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
 }
