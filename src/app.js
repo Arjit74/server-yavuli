@@ -4,12 +4,12 @@ const cors = require('cors');
 
 const app = express();
 
-//middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({extended: true}));
+app.use(express.urlencoded({ extended: true }));
 
-//import routes
+// Import routes
 const authRoutes = require('./routes/auth');
 const listingsRoutes = require('./routes/listings');
 const chatRoutes = require('./routes/chat');
@@ -17,29 +17,30 @@ const paymentsRoutes = require('./routes/payments.js');
 const reportsRoutes = require('./routes/reports');
 const usersRoutes = require('./routes/users');
 
-//use routes
-app.use('/api/users', usersRoutes)
+// Use routes
+app.use('/api/users', usersRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/reports', reportsRoutes);
 
-//routes
-app.get('/',(req,res)=>{
-    res.json({
-        message: 'Welcome to Yavuli Marketplace API ',
-        for_routes:"goto /api to get all included routes "
-    })
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Welcome to Yavuli Marketplace API',
+    for_routes: "goto /api to get all included routes"
+  });
 });
 
-app.get('/health',(req,res)=>{
-    res.status(200).json
-    ({
-        message:"Server is healthy and running successfully!"
-     })
-})
 
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    message: "Server is healthy and running successfully!"
+  });
+});
+
+// API info
 app.get('/api', (req, res) => {
   res.json({
     message: 'Welcome to Yavuli API',
@@ -54,6 +55,4 @@ app.get('/api', (req, res) => {
   });
 });
 
-
 module.exports = app;
-

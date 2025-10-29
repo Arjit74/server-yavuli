@@ -1,5 +1,7 @@
 const supabase = require('../config/supabase');
 
+const FRONTEND_URL = 'https://yavuli.netlify.app';
+
 // Sign up a new user with Supabase Auth
 const signUp = async (email, password, userData) => {
     const { data, error } = await supabase.auth.signUp({
@@ -9,7 +11,9 @@ const signUp = async (email, password, userData) => {
             data: {
                 name: userData.name,
                 role: userData.role || 'user'
-            }
+            },
+           
+            emailRedirectTo: `${FRONTEND_URL}/auth/verify`
         }
     });
 
