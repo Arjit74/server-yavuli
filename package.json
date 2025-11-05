@@ -13,8 +13,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "razorpay": "^2.9.6"
   },
   "repository": {
     "type": "git",
