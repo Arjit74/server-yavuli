@@ -4,7 +4,7 @@ const crypto = require('crypto');
 
 const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/authmiddleware');
-const paymentHelper = require('../helpers/paymentHelper');
+const paymentHelper = require('../utils/paymentHelper');
 const razorpay = require('../config/razorpay');
 
 const router = express.Router();
@@ -16,7 +16,6 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     const { listingId, itemPrice } = req.body;
     const buyerId = req.user.id;
 
-    // Validate input
     if (!listingId || !itemPrice) {
       return res.status(400).json({
         success: false,
