@@ -18,7 +18,7 @@ const reportsRoutes = require('./routes/reports');
 const usersRoutes = require('./routes/users');
 
 //use routes
-app.use('/api/users', usersRoutes)
+app.use('/api/users', usersRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingsRoutes);
 app.use('/api/chat', chatRoutes);
