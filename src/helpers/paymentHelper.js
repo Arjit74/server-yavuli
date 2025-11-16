@@ -2,7 +2,7 @@ function calculatePaymentBreakdown(itemPriceInRupees) {
   if (!itemPriceInRupees || itemPriceInRupees <= 0) {
     throw new Error('Item price must be a positive number');
   }
-  if (itemPriceInRupees > 100000) {
+  if (itemPriceInRupees > 100000) { // 10 lakh rupees limit
     throw new Error('Item price exceeds maximum allowed limit');
   }
 

@@ -9,7 +9,13 @@
     "keep-alive": "node src/keep-alive.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["express", "supabase", "backend", "yavuli", "api"],
+  "keywords": [
+    "express",
+    "supabase",
+    "backend",
+    "yavuli",
+    "api"
+  ],
   "author": "Arjit Sharma",
   "license": "ISC",
   "repository": {
@@ -26,9 +32,11 @@
     "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-validator": "^7.3.0",
     "razorpay": "^2.9.6"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "supabase": "^2.54.11"
   }
 }
