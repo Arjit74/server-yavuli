@@ -2,6 +2,143 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const { body, validationResult } = require('express-validator');
+const { authMiddleware } = require('../middleware/authmiddleware');
+
+// POST - Create a new listing
+router.post('/', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const userEmail = req.user?.email;
+    console.log('POST /listings - User ID:', userId);
+    console.log('Request body keys:', Object.keys(req.body));
+    
+    const { title, description, category, condition, price, originalPrice, city, college, reason, age, status = 'published', images = [] } = req.body;
+
+    // Validation
+    if (!title || !price || !description || !category || !condition) {
+      console.log('Validation failed - Missing required fields:', { title, price, description, category, condition });
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields: title, price, description, category, condition"
+      });
+    }
+
+    // Ensure user exists in users table (create if not exists)
+    try {
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (!existingUser && fetchError?.code === 'PGRST116') {
+        // User doesn't exist, create them
+        console.log('Creating user record for:', userId);
+        const { error: createError } = await supabase
+          .from('users')
+          .insert([{
+            id: userId,
+            email: userEmail,
+            full_name: userEmail?.split('@')[0] || 'User',
+            location: city || null
+          }]);
+
+        if (createError) {
+          console.error('Error creating user record:', createError);
+          // Continue anyway, the insert below might still work
+        } else {
+          console.log('User record created successfully');
+        }
+      }
+    } catch (userCreateError) {
+      console.error('Warning: Could not ensure user exists:', userCreateError);
+      // Continue with listing creation
+    }
+
+    // Parse images if it's a string (from FormData)
+    let imageArray = [];
+    if (typeof images === 'string') {
+      try {
+        imageArray = JSON.parse(images);
+      } catch (e) {
+        imageArray = images ? [images] : [];
+      }
+    } else if (Array.isArray(images)) {
+      imageArray = images;
+    }
+
+    // Convert status from client format to database format
+    let dbStatus = 'active'; // default
+    if (status === 'draft') {
+      dbStatus = 'draft';
+    } else if (status === 'published') {
+      dbStatus = 'active';
+    }
+
+    console.log('Creating listing with:', { userId, title, price, category, condition, city, status, dbStatus, imageCount: imageArray.length });
+
+    // Validate userId
+    if (!userId) {
+      console.log('Error: No user ID extracted from token');
+      return res.status(401).json({
+        success: false,
+        error: "User not authenticated"
+      });
+    }
+
+    console.log('About to insert listing into DB with values:', {
+      user_id: userId,
+      title,
+      description,
+      category,
+      condition,
+      price: parseFloat(price),
+      location: city,
+      status: dbStatus
+    });
+
+    // Create the listing
+    const { data: listing, error } = await supabase
+      .from('listings')
+      .insert([{
+        user_id: userId,
+        title,
+        description,
+        category,
+        condition,
+        price: parseFloat(price),
+        location: city,
+        images: imageArray,
+        status: dbStatus
+      }])
+      .select();
+
+    if (error) {
+      console.error("Error creating listing:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to create listing",
+        details: error.message
+      });
+    }
+
+    console.log('Listing created successfully:', listing);
+
+    res.status(201).json({
+      success: true,
+      message: "Listing created successfully",
+      data: listing[0]
+    });
+
+  } catch (error) {
+    console.error("Error in create listing route:", error);
+    res.status(500).json({
+      success: false,
+      error: "Internal server error",
+      details: error.message
+    });
+  }
+});
 
 // GET all listings
 router.get('/', async (req, res) => {

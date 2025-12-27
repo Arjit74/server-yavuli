@@ -17,6 +17,79 @@ router.get('/', (req, res) => {
   }
 });
 
+// Create or sync user record in database (called after signup)
+router.post('/sync-user', authMiddleware, async (req, res) => {
+  try {
+    const { full_name, city, college } = req.body;
+    const userId = req.user?.id;
+    const userEmail = req.user?.email;
+
+    if (!userId || !userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'User information missing'
+      });
+    }
+
+    console.log('Syncing user to database:', { userId, userEmail, full_name, city, college });
+
+    // Check if user already exists
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    // If user doesn't exist, create them
+    if (!existingUser && fetchError?.code === 'PGRST116') {
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: userId,
+          email: userEmail,
+          full_name: full_name || userEmail.split('@')[0],
+          location: city || null,
+          // Note: college is not in the users table, it's user_metadata in auth
+        }])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Error creating user:', insertError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create user record',
+          error: insertError.message
+        });
+      }
+
+      console.log('User created successfully:', newUser);
+      return res.status(201).json({
+        success: true,
+        message: 'User record created',
+        data: newUser
+      });
+    }
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw fetchError;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User already exists'
+    });
+
+  } catch (error) {
+    console.error('Error in sync-user route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to sync user',
+      error: error.message
+    });
+  }
+});
+
 // Simple login for testing (using Supabase Auth)
 router.post('/login', async (req, res) => {
   try {
