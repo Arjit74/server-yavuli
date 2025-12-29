@@ -4,6 +4,16 @@ const supabase = require('../config/supabase');
 const { body, validationResult } = require('express-validator');
 const { authMiddleware } = require('../middleware/authmiddleware');
 
+// Valid condition values
+const VALID_CONDITIONS = ['new', 'like-new', 'used'];
+
+// Function to normalize and validate condition
+const normalizeCondition = (condition) => {
+  if (!condition) return null;
+  const normalized = condition.toLowerCase().replace(/\s+/g, '-');
+  return VALID_CONDITIONS.includes(normalized) ? normalized : null;
+};
+
 // POST - Create a new listing
 router.post('/', authMiddleware, async (req, res) => {
   try {
@@ -20,6 +30,15 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "Missing required fields: title, price, description, category, condition"
+      });
+    }
+
+    // Normalize and validate condition
+    const normalizedCondition = normalizeCondition(condition);
+    if (!normalizedCondition) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid condition. Allowed values are: ${VALID_CONDITIONS.join(', ')}`
       });
     }
 
@@ -105,7 +124,7 @@ router.post('/', authMiddleware, async (req, res) => {
         title,
         description,
         category,
-        condition,
+        condition: normalizedCondition,
         price: parseFloat(price),
         location: city,
         images: imageArray,
