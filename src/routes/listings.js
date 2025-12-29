@@ -280,6 +280,20 @@ router.post('/:id/favorite',
 
         if (removeError) throw removeError;
 
+        // Get current favorite count
+        const { count: favCount, error: countError } = await supabase
+          .from('favorites')
+          .select('*', { count: 'exact', head: true })
+          .eq('listing_id', id);
+
+        if (!countError && favCount !== null) {
+          // Update listing's favorite count
+          await supabase
+            .from('listings')
+            .update({ favorites: Math.max(0, favCount) })
+            .eq('id', id);
+        }
+
         return res.status(200).json({
           success: true,
           message: 'Removed from favorites',
@@ -299,6 +313,20 @@ router.post('/:id/favorite',
           .single();
 
         if (addError) throw addError;
+
+        // Get updated favorite count
+        const { count: favCount, error: countError } = await supabase
+          .from('favorites')
+          .select('*', { count: 'exact', head: true })
+          .eq('listing_id', id);
+
+        if (!countError && favCount !== null) {
+          // Update listing's favorite count
+          await supabase
+            .from('listings')
+            .update({ favorites: favCount })
+            .eq('id', id);
+        }
 
         return res.status(201).json({
           success: true,
