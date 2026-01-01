@@ -9,6 +9,13 @@ const razorpay = require('../config/razorpay');
 
 const router = express.Router();
 
+// Health check - verify payments router is loaded
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'Payments router is loaded and working',
+    timestamp: new Date().toISOString()
+  });
+});
 
 router.post('/create-order', authMiddleware, async (req, res) => {
   try {
