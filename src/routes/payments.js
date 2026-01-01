@@ -67,7 +67,17 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       .eq('id', listingId)
       .single();
 
-    if (listingError || !listingData) {
+    if (listingError) {
+      console.error('❌ Supabase error fetching listing:', listingError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch listing details',
+        error: listingError.message
+      });
+    }
+
+    if (!listingData) {
+      console.log('⚠️ Listing not found for ID:', listingId);
       return res.status(404).json({
         success: false,
         message: 'Listing not found',
