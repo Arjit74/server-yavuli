@@ -94,8 +94,10 @@ router.post('/create-order', authMiddleware, async (req, res) => {
 
     // Step 2: Calculate payment breakdown
     const breakdown = paymentHelper.calculatePaymentBreakdown(itemPrice);
+    console.log('✅ Payment breakdown calculated:', breakdown);
 
     // Step 3: Create order in Razorpay
+    console.log('🔄 Creating Razorpay order...');
     const razorpayOrder = await razorpay.orders.create({
       // Amount in paise 
       amount: breakdown.totalAmount.paise,
@@ -107,6 +109,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
         listingTitle: listingData.title,
       },
     });
+    console.log('✅ Razorpay order created:', razorpayOrder.id);
 
 // Step 4: Save transaction to database
     const { data: savedTransaction, error: dbError } = await supabase
@@ -123,12 +126,15 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       .select();
 
     if (dbError) {
-      console.error('Database error:', dbError);
+      console.error('❌ Database error:', dbError);
       return res.status(500).json({
         success: false,
         message: 'Failed to create transaction in database',
+        error: dbError.message
       });
     }
+
+    console.log('✅ Transaction saved:', savedTransaction[0].id);
 
 // Step 6: Return response to frontend
     return res.status(200).json({
@@ -144,7 +150,8 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       razorpayKeyId: process.env.RAZORPAY_KEY_ID,
     });
   } catch (error) {
-    console.error('Create order error:', error);
+    console.error('❌ CREATE-ORDER FATAL ERROR:', error.message);
+    console.error('Error stack:', error.stack);
     return res.status(500).json({
       success: false,
       message: 'Failed to create order',
