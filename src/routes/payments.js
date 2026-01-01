@@ -63,7 +63,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     // Step 1: Get listing details to verify it exists and get seller_id
     const { data: listingData, error: listingError } = await supabase
       .from('listings')
-      .select('id, seller_id, title')
+      .select('id, user_id, title')
       .eq('id', listingId)
       .single();
 
@@ -85,7 +85,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     }
 
     // Security check: Make sure buyer is not the seller
-    if (listingData.seller_id === buyerId) {
+    if (listingData.user_id === buyerId) {
       return res.status(400).json({
         success: false,
         message: 'You cannot buy your own listing',
@@ -114,7 +114,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       .insert({
         listing_id: listingId,
         buyer_id: buyerId,
-        seller_id: listingData.seller_id,
+        seller_id: listingData.user_id,
         amount: breakdown.totalAmount.rupees,
         status: 'created',
         payment_method: 'razorpay',
