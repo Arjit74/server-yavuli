@@ -26,8 +26,21 @@ router.post('/test', (req, res) => {
   });
 });
 
+// Test authenticated endpoint
+router.post('/test-auth', authMiddleware, (req, res) => {
+  res.json({
+    message: 'Authenticated endpoint works',
+    user: req.user,
+    timestamp: new Date().toISOString()
+  });
+});
+
 router.post('/create-order', authMiddleware, async (req, res) => {
   try {
+    console.log('✅ CREATE-ORDER ENDPOINT REACHED');
+    console.log('User:', req.user);
+    console.log('Body:', req.body);
+    
     // Extract data from request
     const { listingId, itemPrice } = req.body;
     const buyerId = req.user.id;
