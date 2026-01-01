@@ -55,4 +55,32 @@ app.get('/api', (req, res) => {
   });
 });
 
+// Debug endpoint to list all registered routes
+app.get('/api/debug/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        path: middleware.route.path,
+        methods: Object.keys(middleware.route.methods)
+      });
+    } else if (middleware.name === 'router') {
+      middleware.handle.stack.forEach((handler) => {
+        const path = handler.route?.path;
+        if (path) {
+          routes.push({
+            path: handler.route.path,
+            methods: Object.keys(handler.route.methods)
+          });
+        }
+      });
+    }
+  });
+  res.json({
+    debug: 'All registered routes',
+    totalRoutes: routes.length,
+    routes: routes
+  });
+});
+
 module.exports = app;
