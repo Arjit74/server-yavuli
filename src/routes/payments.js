@@ -17,6 +17,15 @@ router.get('/health', (req, res) => {
   });
 });
 
+// Test POST endpoint without auth
+router.post('/test', (req, res) => {
+  res.json({
+    message: 'POST endpoint works',
+    body: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
 router.post('/create-order', authMiddleware, async (req, res) => {
   try {
     // Extract data from request
