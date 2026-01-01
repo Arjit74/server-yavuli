@@ -184,6 +184,23 @@ router.post('/verify-payment', async (req, res) => {
       });
     }
 
+    // Step 4: Mark listing as sold and update with buyer info
+    const transaction = updatedTransaction[0];
+    const { error: listingUpdateError } = await supabase
+      .from('listings')
+      .update({
+        status: 'sold',
+        updated_at: new Date(),
+      })
+      .eq('id', transaction.listing_id);
+
+    if (listingUpdateError) {
+      console.error('Error updating listing status:', listingUpdateError);
+      // Don't fail the payment verification if listing update fails
+      // The transaction is already completed, so we log the error but continue
+      console.warn('Payment successful but listing status update failed - manual intervention may be needed');
+    }
+
     // Step 5: Success! Payment is verified and saved
     return res.status(200).json({
       success: true,
