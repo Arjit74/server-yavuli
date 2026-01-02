@@ -98,6 +98,15 @@ router.post('/create-order', authMiddleware, async (req, res) => {
 
     // Step 3: Create order in Razorpay
     console.log('🔄 Creating Razorpay order...');
+    console.log('RAZORPAY_KEY_ID set:', !!process.env.RAZORPAY_KEY_ID);
+    console.log('RAZORPAY_KEY_SECRET set:', !!process.env.RAZORPAY_KEY_SECRET);
+    console.log('Razorpay instance:', razorpay ? 'exists' : 'MISSING');
+    
+    if (!razorpay || !razorpay.orders) {
+      throw new Error('Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to environment variables.');
+    }
+
+    console.log('🔄 Calling razorpay.orders.create()...');
     const razorpayOrder = await razorpay.orders.create({
       // Amount in paise 
       amount: breakdown.totalAmount.paise,
@@ -109,7 +118,12 @@ router.post('/create-order', authMiddleware, async (req, res) => {
         listingTitle: listingData.title,
       },
     });
-    console.log('✅ Razorpay order created:', razorpayOrder.id);
+    console.log('✅ Razorpay order created:', razorpayOrder);
+    
+    if (!razorpayOrder || !razorpayOrder.id) {
+      throw new Error(`Invalid Razorpay response: ${JSON.stringify(razorpayOrder)}`);
+    }
+    console.log('✅ Order ID:', razorpayOrder.id);
 
 // Step 4: Save transaction to database
     const { data: savedTransaction, error: dbError } = await supabase
@@ -150,12 +164,18 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       razorpayKeyId: process.env.RAZORPAY_KEY_ID,
     });
   } catch (error) {
-    console.error('❌ CREATE-ORDER FATAL ERROR:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('❌ CREATE-ORDER FATAL ERROR');
+    console.error('Error type:', typeof error);
+    console.error('Error:', error);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
+    console.error('Full error object:', JSON.stringify(error, null, 2));
+    
+    const errorMessage = error?.message || error?.toString() || 'Unknown error';
     return res.status(500).json({
       success: false,
       message: 'Failed to create order',
-      error: error.message,
+      error: errorMessage,
     });
   }
 });
