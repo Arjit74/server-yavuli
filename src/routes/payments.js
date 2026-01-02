@@ -107,11 +107,15 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     }
 
     console.log('🔄 Calling razorpay.orders.create()...');
+    
+    // Generate a short receipt (max 40 chars for Razorpay)
+    const shortReceipt = `rcpt_${Date.now().toString().slice(-8)}`;
+    
     const razorpayOrder = await razorpay.orders.create({
       // Amount in paise 
       amount: breakdown.totalAmount.paise,
       currency: 'INR',
-      receipt: `receipt_${listingId}_${Date.now()}`,
+      receipt: shortReceipt,
       notes: {
         listingId: listingId,
         buyerId: buyerId,
