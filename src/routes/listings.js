@@ -21,7 +21,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const userEmail = req.user?.email;
     console.log('POST /listings - User ID:', userId);
     console.log('Request body keys:', Object.keys(req.body));
-    
+
     const { title, description, category, condition, price, originalPrice, city, college, reason, age, status = 'published', images = [] } = req.body;
 
     // Validation
@@ -159,11 +159,51 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// GET all listings
+// GET all listings with filters
 router.get('/', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('listings') .select('*');
- //fail
+    const { category, minPrice, maxPrice, condition, verified, searchQuery } = req.query;
+
+    // Start building the query
+    // We include user verification status using a join
+    let query = supabase
+      .from('listings')
+      .select(`
+        *,
+        seller:users!user_id (
+          is_verified,
+          full_name,
+          profile_image_url
+        )
+      `)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    // Apply category filter
+    if (category && category !== '') {
+      query = query.eq('category', category);
+    }
+
+    // Apply price range filters
+    if (minPrice) {
+      query = query.gte('price', parseFloat(minPrice));
+    }
+    if (maxPrice) {
+      query = query.lte('price', parseFloat(maxPrice));
+    }
+
+    // Apply condition filter
+    if (condition && condition !== '') {
+      query = query.eq('condition', condition);
+    }
+
+    // Apply search query (simple title/description search)
+    if (searchQuery) {
+      query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error("Error fetching listings:", error);
       return res.status(500).json({
@@ -172,12 +212,19 @@ router.get('/', async (req, res) => {
         details: error.message
       });
     }
-//pass
+
+    // Apply verification filter in memory (easier with Supabase joins for this case)
+    let filteredData = data;
+    if (verified === 'true') {
+      filteredData = data.filter(listing => listing.seller?.is_verified === true);
+    }
+
     res.status(200).json({
       success: true,
       message: "Listings fetched successfully",
-      count: data.length,
-      data: data
+      count: filteredData.length,
+      originalCount: data.length,
+      data: filteredData
     });
 
   } catch (error) {
@@ -217,7 +264,7 @@ router.get('/:id', async (req, res) => {
     try {
       // Set the user agent for the current session
       await supabase.rpc('set_user_agent', { user_agent: userAgent });
-      
+
       // Call the increment_view_count function
       await supabase.rpc('increment_view_count', {
         listing_id_param: id,
@@ -237,7 +284,7 @@ router.get('/:id', async (req, res) => {
         .eq('listing_id', id)
         .eq('user_id', userId)
         .single();
-      
+
       isFavorited = !!favorite && !favoriteError;
     }
 
@@ -267,7 +314,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Toggle favorite status for a listing
-router.post('/:id/favorite', 
+router.post('/:id/favorite',
   async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
@@ -323,9 +370,9 @@ router.post('/:id/favorite',
         const { data: favorite, error: addError } = await supabase
           .from('favorites')
           .insert([
-            { 
-              user_id: userId, 
-              listing_id: id 
+            {
+              user_id: userId,
+              listing_id: id
             }
           ])
           .select()
