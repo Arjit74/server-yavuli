@@ -129,6 +129,7 @@ router.post('/', authMiddleware, async (req, res) => {
         condition: normalizedCondition,
         price: parseFloat(price),
         location: city,
+        college_name: college,
         images: imageArray,
         status: dbStatus
       }])
