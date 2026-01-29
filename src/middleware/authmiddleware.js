@@ -31,7 +31,8 @@ const authMiddleware = async (req, res, next) => {
       req.user = {
         id: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        metadata: user.user_metadata || {}
       };
       console.log('User authenticated:', user.email);
 
