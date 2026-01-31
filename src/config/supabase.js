@@ -5,6 +5,13 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://iicvtlvcdmuxnhyithkr.su
 // Do NOT use ANON_KEY on the server - it lacks permission to verify tokens
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabaseKey) {
+    console.warn('⚠️ WARNING: No Supabase key found! Database operations will fail.');
+}
+
+// Fallback to avoid crash on startup, allowing server to serve CORS headers and 500 errors instead of 503
+const finalKey = supabaseKey || 'MISSING_KEY';
+
+const supabase = createClient(supabaseUrl, finalKey);
 
 module.exports = supabase;

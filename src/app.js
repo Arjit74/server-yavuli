@@ -7,6 +7,7 @@ const app = express();
 // Middleware
 const allowedOrigins = [
   'https://yavuli.netlify.app',
+  'https://www.yavuli.netlify.app',
   'http://localhost:5173',
   'http://localhost:3000'
 ];
@@ -15,7 +16,12 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
+
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes(origin.replace(/\/$/, ""));
+
+    if (!isAllowed) {
+      console.log('Blocked by CORS:', origin); // Log blocked origins for debugging
       return callback(null, false);
     }
     return callback(null, true);
