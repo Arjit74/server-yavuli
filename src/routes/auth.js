@@ -20,7 +20,7 @@ router.get('/', (req, res) => {
 // Create or sync user record in database (called after signup)
 router.post('/sync-user', authMiddleware, async (req, res) => {
   try {
-    const { full_name, city, college } = req.body;
+    const { full_name, city, college, phone } = req.body;
     const userId = req.user?.id;
     const userEmail = req.user?.email;
 
@@ -36,7 +36,7 @@ router.post('/sync-user', authMiddleware, async (req, res) => {
     // Check if user already exists
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, full_name, location, phone')
       .eq('id', userId)
       .single();
 
@@ -49,6 +49,7 @@ router.post('/sync-user', authMiddleware, async (req, res) => {
           email: userEmail,
           full_name: full_name || userEmail.split('@')[0],
           location: city || null,
+          phone: phone || null,
           // Note: college is not in the users table, it's user_metadata in auth
         }])
         .select()
@@ -73,6 +74,40 @@ router.post('/sync-user', authMiddleware, async (req, res) => {
 
     if (fetchError && fetchError.code !== 'PGRST116') {
       throw fetchError;
+    }
+
+    if (existingUser) {
+      const updates = {};
+      if (full_name && full_name !== existingUser.full_name) {
+        updates.full_name = full_name;
+      }
+      if (city && city !== existingUser.location) {
+        updates.location = city;
+      }
+      if (phone && phone !== existingUser.phone) {
+        updates.phone = phone;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('Error updating user record:', updateError);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to update user record',
+            error: updateError.message
+          });
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'User record updated'
+        });
+      }
     }
 
     res.status(200).json({

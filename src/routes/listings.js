@@ -129,6 +129,7 @@ router.post('/', authMiddleware, async (req, res) => {
         condition: normalizedCondition,
         price: parseFloat(price),
         location: city,
+        college_name: college,
         images: imageArray,
         status: dbStatus
       }])
@@ -176,7 +177,8 @@ router.get('/', async (req, res) => {
         seller:users!user_id (
           is_verified,
           full_name,
-          profile_image_url
+          profile_image_url,
+          phone
         )
       `)
       .eq('status', 'active')
@@ -239,6 +241,54 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET listings created by the authenticated user
+router.get('/my', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('listings')
+      .select(`
+        *,
+        seller:users!user_id (
+          full_name,
+          phone,
+          profile_image_url,
+          is_verified
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user listings:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch listings',
+        error: error.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: data || []
+    });
+  } catch (error) {
+    console.error('Error in /my listings route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 // GET a single listing by ID
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
@@ -247,7 +297,15 @@ router.get('/:id', async (req, res) => {
     // Get the listing
     const { data: listing, error: fetchError } = await supabase
       .from('listings')
-      .select('*')
+      .select(`
+        *,
+        seller:users!user_id (
+          full_name,
+          phone,
+          profile_image_url,
+          is_verified
+        )
+      `)
       .eq('id', id)
       .single();
 
@@ -276,5 +334,59 @@ router.get('/:id', async (req, res) => {
 });
 
 // Note: Favoriting and Popular (view-based) routes have been removed as per requirements.
+
+// DELETE (soft delete) a listing owned by the authenticated user
+router.delete('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    const { data: listing, error: fetchError } = await supabase
+      .from('listings')
+      .select('id, user_id, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching listing for deletion:', fetchError);
+      return res.status(404).json({
+        success: false,
+        message: 'Listing not found'
+      });
+    }
+
+    if (listing.user_id !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to delete this listing'
+      });
+    }
+
+    const { error: updateError } = await supabase
+      .from('listings')
+      .update({ status: 'archived', updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (updateError) {
+      console.error('Error archiving listing:', updateError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to delete listing',
+        error: updateError.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Listing removed successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting listing:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
 
 module.exports = router;

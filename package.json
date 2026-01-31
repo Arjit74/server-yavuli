@@ -37,6 +37,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.0",
-    "supabase": "^2.54.11"
+    "supabase": "^2.72.9"
   }
 }
