@@ -9,7 +9,8 @@ const allowedOrigins = [
   'https://yavuli.netlify.app',
   'https://www.yavuli.netlify.app',
   'http://localhost:5173',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://192.168.1.7:3001'
 ];
 
 app.use(cors({
