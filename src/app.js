@@ -29,10 +29,17 @@ app.use(cors({
     }
     return callback(null, true);
   },
-  credentials: true
+  credentials: false // Set to false since app uses Bearer tokens, not cookies
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request timeout protection
+app.use((req, res, next) => {
+  req.setTimeout(30000); // 30 seconds
+  res.setTimeout(30000);
+  next();
+});
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -85,6 +92,29 @@ app.get('/api/debug/routes', (req, res) => {
   res.json({
     message: 'Routes are registered',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Handle 404s for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    path: req.path
+  });
+});
+
+// Global error handler (must be last middleware)
+app.use((err, req, res, next) => {
+  console.error('Error:', err.stack);
+
+  // Don't leak error details in production
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: isDev ? err.message : 'Internal server error',
+    ...(isDev && { stack: err.stack })
   });
 });
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/authmiddleware');
+const asyncHandler = require('../utils/asyncHandler');
 
 
 router.get('/', (req, res) => {
@@ -136,8 +137,8 @@ router.post('/login', async (req, res) => {
         message: 'Email and password are required'
       });
     }
-    
-// Ask superbase to verify credentials
+
+    // Ask superbase to verify credentials
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password
@@ -171,6 +172,40 @@ router.post('/login', async (req, res) => {
     });
   }
 });
+
+// Refresh access token endpoint
+router.post('/refresh', asyncHandler(async (req, res) => {
+  const { refresh_token } = req.body;
+
+  if (!refresh_token) {
+    return res.status(400).json({
+      success: false,
+      message: 'Refresh token is required'
+    });
+  }
+
+  const { data, error } = await supabase.auth.refreshSession({
+    refresh_token
+  });
+
+  if (error) {
+    console.error('Token refresh error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Failed to refresh token',
+      code: 'REFRESH_FAILED',
+      error: error.message
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: 'Token refreshed successfully',
+    token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+    expires_at: data.session.expires_at
+  });
+}));
 
 
 module.exports = router;
