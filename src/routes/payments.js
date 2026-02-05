@@ -11,7 +11,7 @@ const router = express.Router();
 
 // Health check - verify payments router is loaded
 router.get('/health', (req, res) => {
-  res.json({ 
+  res.json({
     status: 'Payments router is loaded and working',
     timestamp: new Date().toISOString()
   });
@@ -40,47 +40,41 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     console.log('✅ CREATE-ORDER ENDPOINT REACHED');
     console.log('User:', req.user);
     console.log('Body:', req.body);
-    
-    // Extract data from request
-    const { listingId, itemPrice } = req.body;
+
+    // Extract data from request - DO NOT TRUST itemPrice from client
+    const { listingId, itemPrice: clientProvidedPrice } = req.body;
     const buyerId = req.user.id;
 
-    if (!listingId || !itemPrice) {
+    if (!listingId) {
       return res.status(400).json({
         success: false,
-        message: 'listingId and itemPrice are required',
+        message: 'listingId is required',
       });
     }
 
-    // Validate item price is a positive number
-    if (typeof itemPrice !== 'number' || itemPrice <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'itemPrice must be a positive number',
-      });
-    }
-
-    // Step 1: Get listing details to verify it exists and get seller_id
+    // Step 1: Get listing details to verify it exists, get price, and get seller_id
     const { data: listingData, error: listingError } = await supabase
       .from('listings')
-      .select('id, user_id, title')
+      .select('id, user_id, title, price')
       .eq('id', listingId)
       .single();
 
-    if (listingError) {
-      console.error('❌ Supabase error fetching listing:', listingError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch listing details',
-        error: listingError.message
-      });
-    }
-
-    if (!listingData) {
-      console.log('⚠️ Listing not found for ID:', listingId);
+    if (listingError || !listingData) {
+      console.error('❌ Error fetching listing:', listingError);
       return res.status(404).json({
         success: false,
         message: 'Listing not found',
+      });
+    }
+
+    // USE THE PRICE FROM OUR DATABASE - SECURITY FIX FOR PRICE TEMPERING
+    const itemPrice = listingData.price;
+    console.log(`[Security] Validating price for ${listingId}: Client sent ${clientProvidedPrice}, DB says ${itemPrice}`);
+
+    if (!itemPrice || itemPrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid listing price in database',
       });
     }
 
@@ -92,25 +86,25 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       });
     }
 
-    // Step 2: Calculate payment breakdown
+    // Step 2: Calculate payment breakdown using the VERIFIED price
     const breakdown = paymentHelper.calculatePaymentBreakdown(itemPrice);
-    console.log('✅ Payment breakdown calculated:', breakdown);
+    console.log('✅ Payment breakdown calculated from verified price:', breakdown);
 
     // Step 3: Create order in Razorpay
     console.log('🔄 Creating Razorpay order...');
     console.log('RAZORPAY_KEY_ID set:', !!process.env.RAZORPAY_KEY_ID);
     console.log('RAZORPAY_KEY_SECRET set:', !!process.env.RAZORPAY_KEY_SECRET);
     console.log('Razorpay instance:', razorpay ? 'exists' : 'MISSING');
-    
+
     if (!razorpay || !razorpay.orders) {
       throw new Error('Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to environment variables.');
     }
 
     console.log('🔄 Calling razorpay.orders.create()...');
-    
+
     // Generate a short receipt (max 40 chars for Razorpay)
     const shortReceipt = `rcpt_${Date.now().toString().slice(-8)}`;
-    
+
     const razorpayOrder = await razorpay.orders.create({
       // Amount in paise 
       amount: breakdown.totalAmount.paise,
@@ -123,13 +117,13 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       },
     });
     console.log('✅ Razorpay order created:', razorpayOrder);
-    
+
     if (!razorpayOrder || !razorpayOrder.id) {
       throw new Error(`Invalid Razorpay response: ${JSON.stringify(razorpayOrder)}`);
     }
     console.log('✅ Order ID:', razorpayOrder.id);
 
-// Step 4: Save transaction to database
+    // Step 4: Save transaction to database
     const { data: savedTransaction, error: dbError } = await supabase
       .from('transactions')
       .insert({
@@ -154,7 +148,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
 
     console.log('✅ Transaction saved:', savedTransaction[0].id);
 
-// Step 6: Return response to frontend
+    // Step 6: Return response to frontend
     return res.status(200).json({
       success: true,
       orderId: razorpayOrder.id,
@@ -174,7 +168,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     console.error('Error message:', error?.message);
     console.error('Error stack:', error?.stack);
     console.error('Full error object:', JSON.stringify(error, null, 2));
-    
+
     const errorMessage = error?.message || error?.toString() || 'Unknown error';
     return res.status(500).json({
       success: false,
@@ -293,7 +287,7 @@ router.get('/transaction/:transactionId', authMiddleware, async (req, res) => {
   try {
     const { transactionId } = req.params;
     const userId = req.user.id;
- // Fetch transaction from database
+    // Fetch transaction from database
     const { data: transaction, error } = await supabase
       .from('transactions')
       .select('*')
@@ -307,7 +301,7 @@ router.get('/transaction/:transactionId', authMiddleware, async (req, res) => {
       });
     }
 
-// This prevents users from viewing other people's transactions
+    // This prevents users from viewing other people's transactions
     if (transaction.buyer_id !== userId && transaction.seller_id !== userId) {
       return res.status(403).json({
         success: false,
