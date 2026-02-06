@@ -18,6 +18,44 @@ router.get('/', (req, res) => {
   }
 });
 
+// Check if email exists in database
+router.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    console.log('Checking email existence:', email);
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error checking email:', error);
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      exists: !!data
+    });
+  } catch (error) {
+    console.error('Error in check-email route:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify email existence',
+      error: error.message
+    });
+  }
+});
+
 // Create or sync user record in database (called after signup)
 router.post('/sync-user', authMiddleware, async (req, res) => {
   try {
