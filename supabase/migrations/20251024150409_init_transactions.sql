@@ -19,3 +19,4 @@ CREATE TABLE transactions (
 CREATE INDEX idx_transactions_buyer_id ON transactions(buyer_id);
 CREATE INDEX idx_transactions_seller_id ON transactions(seller_id);
 CREATE INDEX idx_transactions_status ON transactions(status);
+

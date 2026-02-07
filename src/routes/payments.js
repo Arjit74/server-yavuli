@@ -6,6 +6,8 @@ const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/authmiddleware');
 const paymentHelper = require('../utils/paymentHelper');
 const razorpay = require('../config/razorpay');
+const emailService = require('../services/emailService');
+const invoiceGenerator = require('../utils/invoiceGenerator');
 
 const router = express.Router();
 
@@ -37,7 +39,7 @@ router.post('/test-auth', authMiddleware, (req, res) => {
 
 router.post('/create-order', authMiddleware, async (req, res) => {
   try {
-    console.log('✅ CREATE-ORDER ENDPOINT REACHED');
+    console.log('CREATE-ORDER ENDPOINT REACHED');
     console.log('User:', req.user);
     console.log('Body:', req.body);
     
@@ -68,7 +70,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       .single();
 
     if (listingError) {
-      console.error('❌ Supabase error fetching listing:', listingError);
+      console.error(' Supabase error fetching listing:', listingError);
       return res.status(500).json({
         success: false,
         message: 'Failed to fetch listing details',
@@ -77,7 +79,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     }
 
     if (!listingData) {
-      console.log('⚠️ Listing not found for ID:', listingId);
+      console.log(' Listing not found for ID:', listingId);
       return res.status(404).json({
         success: false,
         message: 'Listing not found',
@@ -94,10 +96,10 @@ router.post('/create-order', authMiddleware, async (req, res) => {
 
     // Step 2: Calculate payment breakdown
     const breakdown = paymentHelper.calculatePaymentBreakdown(itemPrice);
-    console.log('✅ Payment breakdown calculated:', breakdown);
+    console.log('Payment breakdown calculated:', breakdown);
 
     // Step 3: Create order in Razorpay
-    console.log('🔄 Creating Razorpay order...');
+    console.log(' Creating Razorpay order...');
     console.log('RAZORPAY_KEY_ID set:', !!process.env.RAZORPAY_KEY_ID);
     console.log('RAZORPAY_KEY_SECRET set:', !!process.env.RAZORPAY_KEY_SECRET);
     console.log('Razorpay instance:', razorpay ? 'exists' : 'MISSING');
@@ -106,7 +108,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       throw new Error('Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to environment variables.');
     }
 
-    console.log('🔄 Calling razorpay.orders.create()...');
+    console.log(' Calling razorpay.orders.create()...');
     
     // Generate a short receipt (max 40 chars for Razorpay)
     const shortReceipt = `rcpt_${Date.now().toString().slice(-8)}`;
@@ -122,12 +124,12 @@ router.post('/create-order', authMiddleware, async (req, res) => {
         listingTitle: listingData.title,
       },
     });
-    console.log('✅ Razorpay order created:', razorpayOrder);
+    console.log(' Razorpay order created:', razorpayOrder);
     
     if (!razorpayOrder || !razorpayOrder.id) {
       throw new Error(`Invalid Razorpay response: ${JSON.stringify(razorpayOrder)}`);
     }
-    console.log('✅ Order ID:', razorpayOrder.id);
+    console.log(' Order ID:', razorpayOrder.id);
 
 // Step 4: Save transaction to database
     const { data: savedTransaction, error: dbError } = await supabase
@@ -144,7 +146,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       .select();
 
     if (dbError) {
-      console.error('❌ Database error:', dbError);
+      console.error(' Database error:', dbError);
       return res.status(500).json({
         success: false,
         message: 'Failed to create transaction in database',
@@ -152,23 +154,25 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log('✅ Transaction saved:', savedTransaction[0].id);
+    console.log(' Transaction saved:', savedTransaction[0].id);
 
 // Step 6: Return response to frontend
-    return res.status(200).json({
-      success: true,
-      orderId: razorpayOrder.id,
-      transactionId: savedTransaction[0].id,
-      totalAmount: breakdown.totalAmount.rupees,
-      feeBreakdown: {
-        itemPrice: breakdown.itemPrice.rupees,
-        marketplaceFee: breakdown.marketplaceFee.rupees,
-        totalAmount: breakdown.totalAmount.rupees,
-      },
-      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-    });
+return res.status(200).json({
+  success: true,
+  orderId: razorpayOrder.id,
+  transactionId: savedTransaction[0].id,
+  totalAmount: breakdown.totalAmount.rupees,
+  feeBreakdown: {
+    itemPrice: breakdown.itemPrice.rupees,
+    platformFee: breakdown.platformFee.rupees,  
+    sellerAmount: breakdown.sellerAmount.rupees, // NEW: show seller what they'll get
+    totalAmount: breakdown.totalAmount.rupees,
+  },
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+});
+
   } catch (error) {
-    console.error('❌ CREATE-ORDER FATAL ERROR');
+    console.error(' CREATE-ORDER FATAL ERROR');
     console.error('Error type:', typeof error);
     console.error('Error:', error);
     console.error('Error message:', error?.message);
@@ -185,6 +189,7 @@ router.post('/create-order', authMiddleware, async (req, res) => {
 });
 
 // ENDPOINT 2: Verify Payment
+
 router.post('/verify-payment', async (req, res) => {
   try {
     // Extract payment data from frontend
@@ -229,7 +234,7 @@ router.post('/verify-payment', async (req, res) => {
       });
     }
 
-    // Step 3: Signature is valid! Update database
+    // Step 3: Signature is valid! Get transaction details
     if (!transactionId) {
       return res.status(400).json({
         success: false,
@@ -237,11 +242,41 @@ router.post('/verify-payment', async (req, res) => {
       });
     }
 
+    // Fetch the transaction to get the amount
+    const { data: existingTransaction, error: fetchError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', transactionId)
+      .single();
+
+    if (fetchError || !existingTransaction) {
+      console.error('Error fetching transaction:', fetchError);
+      return res.status(500).json({
+        success: false,
+        message: 'Transaction not found',
+      });
+    }
+
+    // Calculate platform fee and seller amount
+    const transactionAmount = existingTransaction.amount;
+    const platformFee = Math.round(transactionAmount * 0.05); // 5%
+    const sellerAmount = transactionAmount - platformFee;     // 95%
+
+    console.log(' Payment breakdown:', {
+      total: transactionAmount,
+      platformFee,
+      sellerAmount,
+    });
+
+    // Step 4: Update transaction with completed status and fee breakdown
     const { data: updatedTransaction, error: updateError } = await supabase
       .from('transactions')
       .update({
         status: 'completed',
         transaction_date: new Date(),
+        platform_fee: platformFee,
+        seller_amount: sellerAmount,
+        payout_status: 'pending', // Money is held, payout pending
       })
       .eq('id', transactionId)
       .select();
@@ -254,8 +289,9 @@ router.post('/verify-payment', async (req, res) => {
       });
     }
 
-    // Step 4: Mark listing as sold and update with buyer info
     const transaction = updatedTransaction[0];
+
+    // Step 5: Mark listing as sold
     const { error: listingUpdateError } = await supabase
       .from('listings')
       .update({
@@ -266,18 +302,52 @@ router.post('/verify-payment', async (req, res) => {
 
     if (listingUpdateError) {
       console.error('Error updating listing status:', listingUpdateError);
-      // Don't fail the payment verification if listing update fails
-      // The transaction is already completed, so we log the error but continue
       console.warn('Payment successful but listing status update failed - manual intervention may be needed');
     }
 
-    // Step 5: Success! Payment is verified and saved
+    
+   // Step 6: Trigger email notifications via Edge Function
+try {
+  console.log(' Triggering email notifications...');
+  
+  const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/notify-order`;
+  
+  const emailResponse = await fetch(edgeFunctionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.SUPABASE_KEY}`, 
+    },
+    body: JSON.stringify({
+      transactionId: transaction.id,
+    }),
+  });
+
+  if (!emailResponse.ok) {
+    const errorText = await emailResponse.text();
+    console.error(' Email notification failed:', errorText);
+  } else {
+    const emailResult = await emailResponse.json();
+    console.log(' Email notifications result:', emailResult);
+  }
+} catch (emailError) {
+  console.error(' Error calling email function:', emailError);
+}
+
+
+    // Step 7: Success! Payment is verified and saved
     return res.status(200).json({
       success: true,
-      message: 'Payment verified successfully',
-      transactionId: transactionId,
+      message: 'Payment verified successfully. Notifications sent.',
+      transactionId: transaction.id,
       orderId: razorpayOrderId,
       paymentId: razorpayPaymentId,
+      payoutStatus: 'pending',
+      breakdown: {
+        total: transactionAmount,
+        platformFee: platformFee,
+        sellerAmount: sellerAmount,
+      },
     });
   } catch (error) {
     console.error('Payment verification error:', error);
@@ -288,6 +358,8 @@ router.post('/verify-payment', async (req, res) => {
     });
   }
 });
+
+
 
 router.get('/transaction/:transactionId', authMiddleware, async (req, res) => {
   try {

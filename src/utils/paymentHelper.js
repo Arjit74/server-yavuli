@@ -1,23 +1,38 @@
+
 function calculatePaymentBreakdown(itemPriceInRupees) {
   if (!itemPriceInRupees || itemPriceInRupees <= 0) {
     throw new Error('Item price must be a positive number');
   }
+  if (itemPriceInRupees > 1000000) { // 10 lakh rupees limit
+    throw new Error('Item price exceeds maximum allowed limit');
+  }
 
-  const marketplaceFeeinRupees = Math.round(itemPriceInRupees * 0.05);
+  // Buyer pays exactly the item price
+  const totalAmountInRupees = itemPriceInRupees;
+  
+  // Platform fee is 5% of the item price
+  const platformFeeInRupees = Math.round(itemPriceInRupees * 0.05);
+  
+  // Seller receives 95% of the item price
+  const sellerAmountInRupees = itemPriceInRupees - platformFeeInRupees;
 
-  const totalAmountInRupees = itemPriceInRupees + marketplaceFeeinRupees;
-  const itemPriceInPaise = itemPriceInRupees * 100;
-  const marketplaceFeeInPaise = marketplaceFeeinRupees * 100;
+  // Convert to paise for Razorpay
   const totalAmountInPaise = totalAmountInRupees * 100;
+  const platformFeeInPaise = platformFeeInRupees * 100;
+  const sellerAmountInPaise = sellerAmountInRupees * 100;
 
   return {
     itemPrice: {
       rupees: itemPriceInRupees,
-      paise: itemPriceInPaise,
+      paise: itemPriceInRupees * 100,
     },
-    marketplaceFee: {
-      rupees: marketplaceFeeinRupees,
-      paise: marketplaceFeeInPaise,
+    platformFee: {
+      rupees: platformFeeInRupees,
+      paise: platformFeeInPaise,
+    },
+    sellerAmount: {
+      rupees: sellerAmountInRupees,
+      paise: sellerAmountInPaise,
     },
     totalAmount: {
       rupees: totalAmountInRupees,
@@ -32,9 +47,9 @@ function formatForDatabase(itemPriceInRupees) {
 
   return {
     itemPrice: breakdown.itemPrice.rupees,
-    marketplaceFee: breakdown.marketplaceFee.rupees,
+    platformFee: breakdown.platformFee.rupees,
+    sellerAmount: breakdown.sellerAmount.rupees,
     totalAmount: breakdown.totalAmount.rupees,
-    sellerAmount: breakdown.itemPrice.rupees,
   };
 }
 
@@ -42,7 +57,6 @@ function getTotalAmountInPaise(itemPriceInRupees) {
   const breakdown = calculatePaymentBreakdown(itemPriceInRupees);
   return breakdown.totalAmount.paise;
 }
-
 
 module.exports = {
   calculatePaymentBreakdown,
