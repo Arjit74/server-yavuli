@@ -59,7 +59,7 @@ router.post('/check-email', async (req, res) => {
 // Create or sync user record in database (called after signup)
 router.post('/sync-user', authMiddleware, async (req, res) => {
   try {
-    const { full_name, city, college, phone } = req.body;
+    const { full_name, city, college_name, college_email, phone } = req.body;
     const userId = req.user?.id;
     const userEmail = req.user?.email;
 
@@ -70,95 +70,66 @@ router.post('/sync-user', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log('Syncing user to database:', { userId, userEmail, full_name, city, college });
+    console.log('Syncing user to database:', { userId, userEmail, full_name, city, college_name, college_email });
 
-    // Check if user already exists
+    // 1. Sync User record (location/phone)
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('id, full_name, location, phone')
       .eq('id', userId)
       .single();
 
-    // If user doesn't exist, create them
     if (!existingUser && fetchError?.code === 'PGRST116') {
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert([{
-          id: userId,
-          email: userEmail,
-          full_name: full_name || userEmail.split('@')[0],
-          location: city || null,
-          phone: phone || null,
-          // Note: college is not in the users table, it's user_metadata in auth
-        }])
-        .select()
-        .single();
+      await supabase.from('users').insert([{
+        id: userId,
+        email: userEmail,
+        full_name: full_name || userEmail.split('@')[0],
+        location: city || null,
+        phone: phone || null,
+      }]);
+    } else if (existingUser) {
+      const userUpdates = {};
+      if (full_name && full_name !== existingUser.full_name) userUpdates.full_name = full_name;
+      if (city && city !== existingUser.location) userUpdates.location = city;
+      if (phone && phone !== existingUser.phone) userUpdates.phone = phone;
 
-      if (insertError) {
-        console.error('Error creating user:', insertError);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to create user record',
-          error: insertError.message
-        });
+      if (Object.keys(userUpdates).length > 0) {
+        await supabase.from('users').update(userUpdates).eq('id', userId);
       }
-
-      console.log('User created successfully:', newUser);
-      return res.status(201).json({
-        success: true,
-        message: 'User record created',
-        data: newUser
-      });
     }
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      throw fetchError;
-    }
+    // 2. Sync Profiles record (college info)
+    const { data: existingProfile, error: profileFetchError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
 
-    if (existingUser) {
-      const updates = {};
-      if (full_name && full_name !== existingUser.full_name) {
-        updates.full_name = full_name;
-      }
-      if (city && city !== existingUser.location) {
-        updates.location = city;
-      }
-      if (phone && phone !== existingUser.phone) {
-        updates.phone = phone;
-      }
+    const profileData = {
+      id: userId,
+      full_name: full_name || userEmail.split('@')[0],
+      college_email: college_email || null,
+      college_name: college_name || null,
+      phone: phone || null,
+      updated_at: new Date().toISOString()
+    };
 
-      if (Object.keys(updates).length > 0) {
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({ ...updates, updated_at: new Date().toISOString() })
-          .eq('id', userId);
-
-        if (updateError) {
-          console.error('Error updating user record:', updateError);
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to update user record',
-            error: updateError.message
-          });
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'User record updated'
-        });
-      }
+    if (!existingProfile && profileFetchError?.code === 'PGRST116') {
+      await supabase.from('profiles').insert([profileData]);
+    } else {
+      await supabase.from('profiles').update(profileData).eq('id', userId);
     }
 
     res.status(200).json({
       success: true,
-      message: 'User already exists'
+      message: 'User and profile records synced'
     });
 
   } catch (error) {
     console.error('Error in sync-user route:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to sync user',
+      message: 'Failed to sync user/profile',
       error: error.message
     });
   }
