@@ -59,7 +59,7 @@ router.post('/check-email', async (req, res) => {
 // Create or sync user record in database (called after signup)
 router.post('/sync-user', authMiddleware, async (req, res) => {
   try {
-    const { full_name, city, college_name, college_email, phone } = req.body;
+    const { full_name, city, college_name, college_email, phone, is_verified } = req.body;
     const userId = req.user?.id;
     const userEmail = req.user?.email;
 
@@ -86,12 +86,14 @@ router.post('/sync-user', authMiddleware, async (req, res) => {
         full_name: full_name || userEmail.split('@')[0],
         location: city || null,
         phone: phone || null,
+        is_verified: is_verified || false,
       }]);
     } else if (existingUser) {
       const userUpdates = {};
       if (full_name && full_name !== existingUser.full_name) userUpdates.full_name = full_name;
       if (city && city !== existingUser.location) userUpdates.location = city;
       if (phone && phone !== existingUser.phone) userUpdates.phone = phone;
+      if (typeof is_verified === 'boolean') userUpdates.is_verified = is_verified;
 
       if (Object.keys(userUpdates).length > 0) {
         await supabase.from('users').update(userUpdates).eq('id', userId);
