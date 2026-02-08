@@ -4,32 +4,21 @@ const cors = require('cors');
 
 const app = express();
 
-// Middleware
 const allowedOrigins = [
   'https://yavuli.netlify.app',
   'https://www.yavuli.netlify.app',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://192.168.1.7:3001',
-  "https://yavuli.app",
-  "https://www.yavuli.app"
+  'https://yavuli.app',
+  'https://www.yavuli.app'
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    // Check if origin is allowed
-    const isAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes(origin.replace(/\/$/, ""));
-
-    if (!isAllowed) {
-      console.log('Blocked by CORS:', origin); // Log blocked origins for debugging
-      return callback(null, false);
-    }
-    return callback(null, true);
-  },
-  credentials: false // Set to false since app uses Bearer tokens, not cookies
+  origin: allowedOrigins, // Let the library handle the matching!
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true // ⚠️ CHANGE TO TRUE (Usually required for headers to pass correctly)
 }));
 
 // Security Headers to prevent Clickjacking and other attacks

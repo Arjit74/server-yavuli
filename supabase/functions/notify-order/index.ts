@@ -186,7 +186,7 @@ function generateBuyerHTML({ transaction, buyer, listing }: any): string {
       <h3>📍 What happens next?</h3>
       <p>The seller has been notified and will contact you soon to arrange delivery or pickup. You can view your order details in your Yavuli account.</p>
       
-      <p style="margin-top: 30px;">If you have any questions, feel free to reach out to our support team at <a href="mailto:support@yavulimarketplace.com">support@yavulimarketplace.com</a></p>
+      <p style="margin-top: 30px;">If you have any questions, feel free to reach out to our support team at <a href="mailto:admin@yavuli.app">admin@yavuli.app</a></p>
     </div>
     <div style="text-align: center; padding: 20px; background-color: #f9f9f9; color: #666; font-size: 12px; border-top: 1px solid #e0e0e0;">
       <p><strong>Yavuli Marketplace</strong></p>
@@ -260,7 +260,7 @@ function generateSellerHTML({ transaction, seller, buyer, listing }: any): strin
         <li>Your payment will be processed automatically after delivery</li>
       </ol>
       
-      <p style="margin-top: 20px;">If you have any questions, please contact us at <a href="mailto:support@yavulimarketplace.com">support@yavulimarketplace.com</a></p>
+      <p style="margin-top: 20px;">If you have any questions, please contact us at <a href="mailto:admin@yavuli.app">admin@yavuli.app</a></p>
     </div>
     <div style="text-align: center; padding: 20px; background-color: #f9f9f9; color: #666; font-size: 12px; border-top: 1px solid #e0e0e0;">
       <p><strong>Yavuli Marketplace</strong></p>
