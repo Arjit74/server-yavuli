@@ -118,6 +118,12 @@ router.post('/', authMiddleware, async (req, res) => {
 
     console.log('Inserting listing with status:', dbStatus);
 
+    console.log('--- DETAILS DEBUG ---');
+    console.log('Reason:', reason);
+    console.log('Age:', age);
+    console.log('Original Price:', originalPrice);
+    console.log('City:', city);
+
     // Create the listing
     const { data: listing, error } = await supabase
       .from('listings')
@@ -128,8 +134,11 @@ router.post('/', authMiddleware, async (req, res) => {
         category,
         condition: normalizedCondition,
         price: parseFloat(price),
-        location: city,
+        original_price: originalPrice ? parseFloat(originalPrice) : null,
+        location_city: city, // Updated to match DB column likely
         college_name: college,
+        why_selling: reason,
+        age_of_item: age,
         images: imageArray,
         status: dbStatus
       }])
