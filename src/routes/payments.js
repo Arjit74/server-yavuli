@@ -1,17 +1,17 @@
 const express = require('express');
 const crypto = require('crypto');
 
-
 const supabase = require('../config/supabase');
 const { authMiddleware } = require('../middleware/authmiddleware');
 const paymentHelper = require('../utils/paymentHelper');
 const razorpay = require('../config/razorpay');
-const emailService = require('../services/emailService');
-const invoiceGenerator = require('../utils/invoiceGenerator');
 
 const router = express.Router();
 
-// Health check - verify payments router is loaded
+// ==========================================
+// Health Checks & Tests
+// ==========================================
+
 router.get('/health', (req, res) => {
   res.json({
     status: 'Payments router is loaded and working',
@@ -19,7 +19,6 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Test POST endpoint without auth
 router.post('/test', (req, res) => {
   res.json({
     message: 'POST endpoint works',
@@ -28,7 +27,6 @@ router.post('/test', (req, res) => {
   });
 });
 
-// Test authenticated endpoint
 router.post('/test-auth', authMiddleware, (req, res) => {
   res.json({
     message: 'Authenticated endpoint works',
@@ -37,87 +35,52 @@ router.post('/test-auth', authMiddleware, (req, res) => {
   });
 });
 
+// ==========================================
+// 1. CREATE ORDER (Initiate Payment)
+// ==========================================
+
 router.post('/create-order', authMiddleware, async (req, res) => {
   try {
     console.log('CREATE-ORDER ENDPOINT REACHED');
-    console.log('User:', req.user);
-    console.log('Body:', req.body);
-
-    // Extract data from request - DO NOT TRUST itemPrice from client
-    const { listingId, itemPrice: clientProvidedPrice } = req.body;
+    const { listingId } = req.body;
     const buyerId = req.user.id;
 
     if (!listingId) {
-      return res.status(400).json({
-        success: false,
-        message: 'listingId is required',
-      });
+      return res.status(400).json({ success: false, message: 'listingId is required' });
     }
 
-    // Step 1: Get listing details to verify it exists, get price, and get seller_id
+    // Step 1: Fetch Listing & Verify Price (Security)
     const { data: listingData, error: listingError } = await supabase
       .from('listings')
       .select('id, user_id, title, price')
       .eq('id', listingId)
       .single();
 
-    if (listingError) {
-      console.error(' Supabase error fetching listing:', listingError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch listing details',
-        error: listingError.message
-      });
+    if (listingError || !listingData) {
+      console.error('Error fetching listing:', listingError);
+      return res.status(404).json({ success: false, message: 'Listing not found' });
     }
 
-    if (!listingData) {
-      console.log(' Listing not found for ID:', listingId);
-      return res.status(404).json({
-        success: false,
-        message: 'Listing not found',
-      });
-    }
-
-    // USE THE PRICE FROM OUR DATABASE - SECURITY FIX FOR PRICE TEMPERING
-    const itemPrice = listingData.price;
-    console.log(`[Security] Validating price for ${listingId}: Client sent ${clientProvidedPrice}, DB says ${itemPrice}`);
-
-    if (!itemPrice || itemPrice <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid listing price in database',
-      });
-    }
-
-    // Security check: Make sure buyer is not the seller
+    // Security: Prevent self-buying
     if (listingData.user_id === buyerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'You cannot buy your own listing',
-      });
+      return res.status(400).json({ success: false, message: 'You cannot buy your own listing' });
     }
 
-    // Step 2: Calculate payment breakdown using the VERIFIED price
+    const itemPrice = listingData.price;
+    if (!itemPrice || itemPrice <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid listing price' });
+    }
+
+    // Step 2: Calculate Breakdown
     const breakdown = paymentHelper.calculatePaymentBreakdown(itemPrice);
-    console.log('Payment breakdown calculated:', breakdown);
 
-    // Step 3: Create order in Razorpay
-    console.log(' Creating Razorpay order...');
-    console.log('RAZORPAY_KEY_ID set:', !!process.env.RAZORPAY_KEY_ID);
-    console.log('RAZORPAY_KEY_SECRET set:', !!process.env.RAZORPAY_KEY_SECRET);
-    console.log('Razorpay instance:', razorpay ? 'exists' : 'MISSING');
-
+    // Step 3: Create Razorpay Order
     if (!razorpay || !razorpay.orders) {
-      throw new Error('Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to environment variables.');
+      throw new Error('Razorpay not configured properly');
     }
 
-    console.log(' Calling razorpay.orders.create()...');
-    
-    // Generate a short receipt (max 40 chars for Razorpay)
     const shortReceipt = `rcpt_${Date.now().toString().slice(-8)}`;
-
     const razorpayOrder = await razorpay.orders.create({
-      // Amount in paise 
       amount: breakdown.totalAmount.paise,
       currency: 'INR',
       receipt: shortReceipt,
@@ -127,14 +90,12 @@ router.post('/create-order', authMiddleware, async (req, res) => {
         listingTitle: listingData.title,
       },
     });
-    console.log(' Razorpay order created:', razorpayOrder);
-    
-    if (!razorpayOrder || !razorpayOrder.id) {
-      throw new Error(`Invalid Razorpay response: ${JSON.stringify(razorpayOrder)}`);
-    }
-    console.log(' Order ID:', razorpayOrder.id);
 
-    // Step 4: Save transaction to database
+    if (!razorpayOrder || !razorpayOrder.id) {
+      throw new Error('Failed to generate Razorpay order ID');
+    }
+
+    // Step 4: Save Initial Transaction to DB
     const { data: savedTransaction, error: dbError } = await supabase
       .from('transactions')
       .insert({
@@ -146,56 +107,45 @@ router.post('/create-order', authMiddleware, async (req, res) => {
         payment_method: 'razorpay',
         transaction_date: new Date(),
       })
-      .select();
+      .select()
+      .single();
 
     if (dbError) {
-      console.error(' Database error:', dbError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to create transaction in database',
-        error: dbError.message
-      });
+      console.error('Database error:', dbError);
+      return res.status(500).json({ success: false, message: 'Failed to create transaction record' });
     }
 
-    console.log(' Transaction saved:', savedTransaction[0].id);
-
-// Step 6: Return response to frontend
-return res.status(200).json({
-  success: true,
-  orderId: razorpayOrder.id,
-  transactionId: savedTransaction[0].id,
-  totalAmount: breakdown.totalAmount.rupees,
-  feeBreakdown: {
-    itemPrice: breakdown.itemPrice.rupees,
-    platformFee: breakdown.platformFee.rupees,  
-    sellerAmount: breakdown.sellerAmount.rupees, // NEW: show seller what they'll get
-    totalAmount: breakdown.totalAmount.rupees,
-  },
-  razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-});
+    // Step 5: Respond to Client
+    return res.status(200).json({
+      success: true,
+      orderId: razorpayOrder.id,
+      transactionId: savedTransaction.id,
+      totalAmount: breakdown.totalAmount.rupees,
+      feeBreakdown: {
+        itemPrice: breakdown.itemPrice.rupees,
+        platformFee: breakdown.platformFee.rupees,
+        sellerAmount: breakdown.sellerAmount.rupees,
+        totalAmount: breakdown.totalAmount.rupees,
+      },
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+    });
 
   } catch (error) {
-    console.error(' CREATE-ORDER FATAL ERROR');
-    console.error('Error type:', typeof error);
-    console.error('Error:', error);
-    console.error('Error message:', error?.message);
-    console.error('Error stack:', error?.stack);
-    console.error('Full error object:', JSON.stringify(error, null, 2));
-
-    const errorMessage = error?.message || error?.toString() || 'Unknown error';
+    console.error('CREATE-ORDER ERROR:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to create order',
-      error: errorMessage,
+      error: error.message,
     });
   }
 });
 
-// ENDPOINT 2: Verify Payment
+// ==========================================
+// 2. VERIFY PAYMENT (Complete Transaction)
+// ==========================================
 
 router.post('/verify-payment', async (req, res) => {
   try {
-    // Extract payment data from frontend
     const {
       razorpayOrderId,
       razorpayPaymentId,
@@ -203,49 +153,24 @@ router.post('/verify-payment', async (req, res) => {
       transactionId,
     } = req.body;
 
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required payment verification fields',
-      });
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !transactionId) {
+      return res.status(400).json({ success: false, message: 'Missing payment verification fields' });
     }
 
-    // Step 1: Generate signature on our server
+    // Step 1: Verify Signature
     const generatedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpayOrderId}|${razorpayPaymentId}`)
       .digest('hex');
 
-    // Step 2: Compare our generated signature with what Razorpay sent
-    const isSignatureValid = generatedSignature === razorpaySignature;
-
-    if (!isSignatureValid) {
-      console.warn('Signature mismatch for order:', razorpayOrderId);
-      // Mark transaction as failed in database
-      if (transactionId) {
-        await supabase
-          .from('transactions')
-          .update({
-            status: 'failed',
-          })
-          .eq('id', transactionId);
-      }
-
-      return res.status(400).json({
-        success: false,
-        message: 'Payment signature verification failed - possible fraud attempt',
-      });
+    if (generatedSignature !== razorpaySignature) {
+      console.warn(`Signature mismatch for tx: ${transactionId}`);
+      // Mark as failed
+      await supabase.from('transactions').update({ status: 'failed' }).eq('id', transactionId);
+      return res.status(400).json({ success: false, message: 'Payment signature verification failed' });
     }
 
-    // Step 3: Signature is valid! Get transaction details
-    if (!transactionId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Transaction ID is required for verification',
-      });
-    }
-
-    // Fetch the transaction to get the amount
+    // Step 2: Fetch Transaction
     const { data: existingTransaction, error: fetchError } = await supabase
       .from('transactions')
       .select('*')
@@ -253,25 +178,24 @@ router.post('/verify-payment', async (req, res) => {
       .single();
 
     if (fetchError || !existingTransaction) {
-      console.error('Error fetching transaction:', fetchError);
-      return res.status(500).json({
-        success: false,
-        message: 'Transaction not found',
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    // Idempotency Check: Don't process if already completed
+    if (existingTransaction.status === 'completed') {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already verified',
+        transactionId: existingTransaction.id
       });
     }
 
-    // Calculate platform fee and seller amount
+    // Step 3: Calculate Fees
     const transactionAmount = existingTransaction.amount;
     const platformFee = Math.round(transactionAmount * 0.05); // 5%
     const sellerAmount = transactionAmount - platformFee;     // 95%
 
-    console.log(' Payment breakdown:', {
-      total: transactionAmount,
-      platformFee,
-      sellerAmount,
-    });
-
-    // Step 4: Update transaction with completed status and fee breakdown
+    // Step 4: Update Transaction Status
     const { data: updatedTransaction, error: updateError } = await supabase
       .from('transactions')
       .update({
@@ -279,79 +203,61 @@ router.post('/verify-payment', async (req, res) => {
         transaction_date: new Date(),
         platform_fee: platformFee,
         seller_amount: sellerAmount,
-        payout_status: 'pending', // Money is held, payout pending
+        payout_status: 'pending',
       })
       .eq('id', transactionId)
-      .select();
+      .select()
+      .single();
 
-    if (updateError || !updatedTransaction || updatedTransaction.length === 0) {
-      console.error('Database update error:', updateError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to update transaction status',
-      });
+    if (updateError) {
+      console.error('Transaction update failed:', updateError);
+      return res.status(500).json({ success: false, message: 'Failed to update transaction status' });
     }
 
-    const transaction = updatedTransaction[0];
-
-    // Step 5: Mark listing as sold
-    const { error: listingUpdateError } = await supabase
+    // Step 5: Update Listing Status to 'Sold'
+    await supabase
       .from('listings')
-      .update({
-        status: 'sold',
-        updated_at: new Date(),
-      })
-      .eq('id', transaction.listing_id);
+      .update({ status: 'sold', updated_at: new Date() })
+      .eq('id', updatedTransaction.listing_id);
 
-    if (listingUpdateError) {
-      console.error('Error updating listing status:', listingUpdateError);
-      console.warn('Payment successful but listing status update failed - manual intervention may be needed');
+    // Step 6: Trigger Email Notifications (Edge Function)
+    try {
+      // Ensure URL doesn't have double slash if env var ends with /
+      const baseUrl = process.env.SUPABASE_URL.replace(/\/$/, "");
+      const edgeFunctionUrl = `${baseUrl}/functions/v1/notify-order`;
+      
+      console.log('Triggering email notification...');
+      fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SUPABASE_KEY}`, // Service Role Key usually required here
+        },
+        body: JSON.stringify({ transactionId: updatedTransaction.id }),
+      }).then(response => {
+         if (!response.ok) console.error('Email trigger failed status:', response.status);
+         else console.log('Email trigger sent successfully');
+      }).catch(err => console.error('Email trigger network error:', err));
+      
+      // We don't await this to keep response fast for the user
+    } catch (emailError) {
+      console.error('Email notification setup failed:', emailError);
     }
 
-    
-   // Step 6: Trigger email notifications via Edge Function
-try {
-  console.log(' Triggering email notifications...');
-  
-  const edgeFunctionUrl = `${process.env.SUPABASE_URL}/functions/v1/notify-order`;
-  
-  const emailResponse = await fetch(edgeFunctionUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.SUPABASE_KEY}`, 
-    },
-    body: JSON.stringify({
-      transactionId: transaction.id,
-    }),
-  });
-
-  if (!emailResponse.ok) {
-    const errorText = await emailResponse.text();
-    console.error(' Email notification failed:', errorText);
-  } else {
-    const emailResult = await emailResponse.json();
-    console.log(' Email notifications result:', emailResult);
-  }
-} catch (emailError) {
-  console.error(' Error calling email function:', emailError);
-}
-
-
-    // Step 7: Success! Payment is verified and saved
+    // Step 7: Success Response
     return res.status(200).json({
       success: true,
-      message: 'Payment verified successfully. Notifications sent.',
-      transactionId: transaction.id,
+      message: 'Payment verified successfully',
+      transactionId: updatedTransaction.id,
       orderId: razorpayOrderId,
-      paymentId: razorpayPaymentId,
       payoutStatus: 'pending',
       breakdown: {
         total: transactionAmount,
-        platformFee: platformFee,
-        sellerAmount: sellerAmount,
+        platformFee,
+        sellerAmount,
       },
     });
+
   } catch (error) {
     console.error('Payment verification error:', error);
     return res.status(500).json({
@@ -362,13 +268,15 @@ try {
   }
 });
 
-
+// ==========================================
+// 3. GET SINGLE TRANSACTION
+// ==========================================
 
 router.get('/transaction/:transactionId', authMiddleware, async (req, res) => {
   try {
     const { transactionId } = req.params;
     const userId = req.user.id;
-    // Fetch transaction from database
+
     const { data: transaction, error } = await supabase
       .from('transactions')
       .select('*')
@@ -376,18 +284,12 @@ router.get('/transaction/:transactionId', authMiddleware, async (req, res) => {
       .single();
 
     if (error || !transaction) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found',
-      });
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
     }
 
-    // This prevents users from viewing other people's transactions
+    // Security: Only allow buyer or seller to view
     if (transaction.buyer_id !== userId && transaction.seller_id !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized access to transaction',
-      });
+      return res.status(403).json({ success: false, message: 'Unauthorized access' });
     }
 
     return res.status(200).json({
@@ -406,16 +308,14 @@ router.get('/transaction/:transactionId', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('Get transaction error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch transaction',
-      error: error.message,
-    });
+    return res.status(500).json({ success: false, message: 'Failed to fetch transaction' });
   }
 });
 
+// ==========================================
+// 4. BUYER HISTORY
+// ==========================================
 
-// ENDPOINT 4: Get Buyer's Transaction History
 router.get('/my-purchases', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -423,11 +323,15 @@ router.get('/my-purchases', authMiddleware, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    const { count } = await supabase
+    // Get Total Count
+    const { count, error: countError } = await supabase
       .from('transactions')
       .select('*', { count: 'exact', head: true })
       .eq('buyer_id', userId);
+    
+    if (countError) throw countError;
 
+    // Get Data
     const { data: transactions, error } = await supabase
       .from('transactions')
       .select('*')
@@ -435,33 +339,26 @@ router.get('/my-purchases', authMiddleware, async (req, res) => {
       .order('transaction_date', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (error) {
-      console.error('Database error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch purchase history',
-      });
-    }
+    if (error) throw error;
 
     return res.status(200).json({
       success: true,
       transactions: transactions || [],
-      total: count,
+      total: count || 0,
       page,
       limit,
-      totalPages: Math.ceil(count / limit),
+      totalPages: Math.ceil((count || 0) / limit),
     });
   } catch (error) {
     console.error('Get purchases error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch purchase history',
-      error: error.message,
-    });
+    return res.status(500).json({ success: false, message: 'Failed to fetch purchase history' });
   }
 });
 
-// ENDPOINT 5: Get Seller's Transaction History (Sales)
+// ==========================================
+// 5. SELLER SALES HISTORY
+// ==========================================
+
 router.get('/my-sales', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -469,15 +366,20 @@ router.get('/my-sales', authMiddleware, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    const { count, data: countData } = await supabase
+    // Get Completed Sales for Earnings Calculation
+    const { count, data: completedSales, error: countError } = await supabase
       .from('transactions')
       .select('amount', { count: 'exact' })
       .eq('seller_id', userId)
       .eq('status', 'completed');
 
-    const totalEarnings = countData ? countData.reduce((sum, t) => sum + t.amount, 0) : 0;
+    if (countError) throw countError;
 
-    // Fetch paginated transactions
+    const totalEarnings = completedSales 
+      ? completedSales.reduce((sum, t) => sum + (t.amount || 0), 0) 
+      : 0;
+
+    // Get Paginated Sales Data
     const { data: transactions, error } = await supabase
       .from('transactions')
       .select('*')
@@ -485,30 +387,20 @@ router.get('/my-sales', authMiddleware, async (req, res) => {
       .order('transaction_date', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (error) {
-      console.error('Database error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch sales history',
-      });
-    }
+    if (error) throw error;
 
     return res.status(200).json({
       success: true,
       transactions: transactions || [],
-      total: count,
-      totalEarnings: totalEarnings,
+      total: count || 0,
+      totalEarnings,
       page,
       limit,
       totalPages: Math.ceil((count || 0) / limit),
     });
   } catch (error) {
     console.error('Get sales error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch sales history',
-      error: error.message,
-    });
+    return res.status(500).json({ success: false, message: 'Failed to fetch sales history' });
   }
 });
 
