@@ -118,11 +118,12 @@ router.post('/', authMiddleware, async (req, res) => {
 
     console.log('Inserting listing with status:', dbStatus);
 
-    console.log('--- DETAILS DEBUG ---');
-    console.log('Reason:', reason);
-    console.log('Age:', age);
-    console.log('Original Price:', originalPrice);
-    console.log('City:', city);
+
+    // Extra debug logging for the missing fields issue
+    console.log('--- DETAILS DEBUG CHECK ---');
+    console.log('Received Reason (why_selling):', reason, 'Type:', typeof reason);
+    console.log('Received Age (age_of_item):', age, 'Type:', typeof age);
+    console.log('Received Original Price (original_price):', originalPrice, 'Type:', typeof originalPrice);
 
     // Create the listing
     const { data: listing, error } = await supabase
@@ -135,10 +136,10 @@ router.post('/', authMiddleware, async (req, res) => {
         condition: normalizedCondition,
         price: parseFloat(price),
         original_price: originalPrice ? parseFloat(originalPrice) : null,
-        location_city: city, // Updated to match DB column likely
+        location_city: city, // Updated to match DB column
         college_name: college,
-        why_selling: reason,
-        age_of_item: age,
+        why_selling: reason || null, // Ensure explicit null if undefined
+        age_of_item: age || null,    // Ensure explicit null if undefined
         images: imageArray,
         status: dbStatus
       }])
