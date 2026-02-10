@@ -146,6 +146,15 @@ router.post('/', authMiddleware, async (req, res) => {
       }])
       .select();
 
+    console.log('--- INSERTION DEBUG ---');
+    console.log('Using Service Role Key:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+    if (error) {
+      console.error('Insert Error:', JSON.stringify(error, null, 2));
+    } else {
+      console.log('Insert Success. Returned Listing:', JSON.stringify(listing, null, 2));
+    }
+
     if (error) {
       console.error("Error creating listing:", error);
       return res.status(500).json({
