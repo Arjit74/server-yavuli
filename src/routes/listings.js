@@ -138,9 +138,8 @@ router.post('/', authMiddleware, async (req, res) => {
         original_price: originalPrice ? parseFloat(originalPrice) : null,
         location_city: city,
         college_name: college,
-        why_selling: "HARDCODED_TEST_REASON", // DIAGNOSTIC TEST
-        age_of_item: "99",    // DIAGNOSTIC TEST
-        original_price: 9999, // DIAGNOSTIC TEST
+        why_selling: reason || null,
+        age_of_item: age || null,
         images: imageArray,
         status: dbStatus
       }])
