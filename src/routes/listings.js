@@ -118,6 +118,13 @@ router.post('/', authMiddleware, async (req, res) => {
 
     console.log('Inserting listing with status:', dbStatus);
 
+
+    // Extra debug logging for the missing fields issue
+    console.log('--- DETAILS DEBUG CHECK ---');
+    console.log('Received Reason (why_selling):', reason, 'Type:', typeof reason);
+    console.log('Received Age (age_of_item):', age, 'Type:', typeof age);
+    console.log('Received Original Price (original_price):', originalPrice, 'Type:', typeof originalPrice);
+
     // Create the listing
     const { data: listing, error } = await supabase
       .from('listings')
@@ -128,12 +135,24 @@ router.post('/', authMiddleware, async (req, res) => {
         category,
         condition: normalizedCondition,
         price: parseFloat(price),
-        location: city,
+        original_price: originalPrice ? parseFloat(originalPrice) : null,
+        location_city: city,
         college_name: college,
+        why_selling: reason || null,
+        age_of_item: age || null,
         images: imageArray,
         status: dbStatus
       }])
       .select();
+
+    console.log('--- INSERTION DEBUG ---');
+    console.log('Using Service Role Key:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+    if (error) {
+      console.error('Insert Error:', JSON.stringify(error, null, 2));
+    } else {
+      console.log('Insert Success. Returned Listing:', JSON.stringify(listing, null, 2));
+    }
 
     if (error) {
       console.error("Error creating listing:", error);
