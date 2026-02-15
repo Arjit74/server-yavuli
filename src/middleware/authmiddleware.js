@@ -62,6 +62,16 @@ const authMiddleware = async (req, res, next) => {
 };
 
 
-module.exports = {
-  authMiddleware
+
+const adminMiddleware = (req, res, next) => {
+  // Check if the user has the 'admin' role OR matches your specific email
+  if (req.user.role !== 'admin' && req.user.email !== 'YOUR_EMAIL@gmail.com') {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Access Denied: Admins Only' 
+    });
+  }
+  next();
 };
+
+module.exports = { authMiddleware, adminMiddleware }; // Export both
