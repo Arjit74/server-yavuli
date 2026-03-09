@@ -185,7 +185,7 @@ router.post('/', authMiddleware, async (req, res) => {
 // GET all listings with filters
 router.get('/', async (req, res) => {
   try {
-    const { category, minPrice, maxPrice, condition, verified, searchQuery } = req.query;
+    const { category, minPrice, maxPrice, condition, verified, searchQuery, limit } = req.query;
 
     // Start building the query
     // We include user verification status using a join
@@ -224,6 +224,11 @@ router.get('/', async (req, res) => {
     // Apply search query (simple title/description search)
     if (searchQuery) {
       query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+    }
+
+    // Apply limit
+    if (limit) {
+      query = query.limit(parseInt(limit, 10));
     }
 
     const { data, error } = await query;
