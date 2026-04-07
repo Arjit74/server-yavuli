@@ -96,7 +96,7 @@ router.post('/sync-user', authMiddleware, async (req, res) => {
       if (typeof is_verified === 'boolean') userUpdates.is_verified = is_verified;
 
       if (Object.keys(userUpdates).length > 0) {
-        await supabase.from('users').update(userUpdates).eq('id', userId);
+       await supabase.from('users').update(userUpdates).eq('id', userId);
       }
     }
 

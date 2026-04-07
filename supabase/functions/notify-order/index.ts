@@ -12,7 +12,6 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -37,21 +36,25 @@ Deno.serve(async (req) => {
 
     if (txError || !transaction) throw new Error('Transaction not found');
 
-    // 2. Fetch Related Data in Parallel (Optimization)
+    // 2. Fetch Related Data in Parallel (Using college_email)
     const [buyerRes, sellerRes, listingRes] = await Promise.all([
-      supabase.from('users').select('email, full_name, phone').eq('id', transaction.buyer_id).single(),
-      supabase.from('users').select('email, full_name, phone').eq('id', transaction.seller_id).single(),
+      supabase.from('profiles').select('college_email, full_name, phone').eq('id', transaction.buyer_id).single(),
+      supabase.from('profiles').select('college_email, full_name, phone').eq('id', transaction.seller_id).single(),
       supabase.from('listings').select('title, description, price').eq('id', transaction.listing_id).single()
     ]);
 
-    const buyer = buyerRes.data;
-    const seller = sellerRes.data;
+    if (buyerRes.error) console.error('🔴 Buyer DB Error:', buyerRes.error);
+    if (sellerRes.error) console.error('🔴 Seller DB Error:', sellerRes.error);
+    if (listingRes.error) console.error('🔴 Listing DB Error:', listingRes.error);
+
+    // Map 'college_email' to 'email' so Resend and your HTML templates still work perfectly
+    const buyer = buyerRes.data ? { ...buyerRes.data, email: buyerRes.data.college_email } : null;
+    const seller = sellerRes.data ? { ...sellerRes.data, email: sellerRes.data.college_email } : null;
     const listing = listingRes.data;
 
     if (!buyer || !seller || !listing) {
-      throw new Error('Incomplete data: Buyer, Seller, or Listing missing');
+      throw new Error(`Data missing -> Buyer exists: ${!!buyer} | Seller exists: ${!!seller} | Listing exists: ${!!listing}`);
     }
-
     // 3. Send Emails in Parallel
     const [buyerEmailResult, sellerEmailResult] = await Promise.all([
       sendEmailToBuyer({ transaction, buyer, listing }),
@@ -157,7 +160,6 @@ async function sendEmailToSeller({ transaction, seller, buyer, listing }: any) {
 function generateBuyerHTML({ transaction, buyer, listing }: any): string {
   const buyerName = buyer.full_name || buyer.email.split('@')[0];
   
-  // Safe date handling
   const dateStr = transaction.transaction_date 
     ? new Date(transaction.transaction_date).toLocaleDateString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric'
@@ -180,18 +182,13 @@ function generateBuyerHTML({ transaction, buyer, listing }: any): string {
         <p><strong>Item:</strong> ${listing.title}</p>
         <p><strong>Transaction ID:</strong> #${transaction.id}</p>
         <p><strong>Date:</strong> ${dateStr}</p>
-        <p><strong>Amount Paid:</strong> <span style="font-size: 18px; color: #4CAF50; font-weight: bold;">₹${transaction.amount}</span></p>
+        <p><strong>Amount Paid:</strong> <span style="font-size: 18px; color: #4CAF50; font-weight: bold;">₹${parseFloat(transaction.amount).toFixed(2)}</span></p>
       </div>
 
       <h3>📍 What happens next?</h3>
       <p>The seller has been notified and will contact you soon to arrange delivery or pickup. You can view your order details in your Yavuli account.</p>
       
       <p style="margin-top: 30px;">If you have any questions, feel free to reach out to our support team at <a href="mailto:admin@yavuli.app">admin@yavuli.app</a></p>
-    </div>
-    <div style="text-align: center; padding: 20px; background-color: #f9f9f9; color: #666; font-size: 12px; border-top: 1px solid #e0e0e0;">
-      <p><strong>Yavuli Marketplace</strong></p>
-      <p>This is an automated email. Please do not reply.</p>
-      <p>© 2026 Yavuli. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -205,11 +202,10 @@ function generateSellerHTML({ transaction, seller, buyer, listing }: any): strin
   const sellerName = seller.full_name || seller.email.split('@')[0];
   const buyerName = buyer.full_name || buyer.email.split('@')[0];
   
-  // Bug fix: use ?? instead of || so 0 is not treated as false
-  const platformFee = transaction.platform_fee ?? Math.round(transaction.amount * 0.05);
-  const sellerAmount = transaction.seller_amount ?? (transaction.amount - platformFee);
+  // UPDATED: Use exact values from DB
+  const platformFee = parseFloat(transaction.platform_fee).toFixed(2);
+  const sellerAmount = parseFloat(transaction.seller_amount).toFixed(2);
   
-  // Safe date handling
   const dateStr = transaction.transaction_date 
     ? new Date(transaction.transaction_date).toLocaleDateString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric'
@@ -232,7 +228,7 @@ function generateSellerHTML({ transaction, seller, buyer, listing }: any): strin
         <h3 style="margin-top: 0; color: #2196F3;">📦 Sale Details</h3>
         <p><strong>Transaction ID:</strong> #${transaction.id}</p>
         <p><strong>Date:</strong> ${dateStr}</p>
-        <p><strong>Sale Amount:</strong> <span style="font-weight: bold;">₹${transaction.amount}</span></p>
+        <p><strong>Sale Amount:</strong> <span style="font-weight: bold;">₹${parseFloat(transaction.amount).toFixed(2)}</span></p>
       </div>
 
       <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
@@ -245,7 +241,7 @@ function generateSellerHTML({ transaction, seller, buyer, listing }: any): strin
 
       <div style="background-color: #d4edda; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
         <h3 style="margin-top: 0; color: #28a745;">💵 Your Payout</h3>
-        <p>Sale Amount: ₹${transaction.amount}</p>
+        <p>Sale Amount: ₹${parseFloat(transaction.amount).toFixed(2)}</p>
         <p style="color: #d32f2f;">Platform Fee (5%): -₹${platformFee}</p>
         <p style="font-size: 18px; font-weight: bold; color: #28a745;">Net Payout: ₹${sellerAmount}</p>
         <p style="margin: 15px 0 0 0; font-size: 14px; color: #666;">
@@ -261,11 +257,6 @@ function generateSellerHTML({ transaction, seller, buyer, listing }: any): strin
       </ol>
       
       <p style="margin-top: 20px;">If you have any questions, please contact us at <a href="mailto:admin@yavuli.app">admin@yavuli.app</a></p>
-    </div>
-    <div style="text-align: center; padding: 20px; background-color: #f9f9f9; color: #666; font-size: 12px; border-top: 1px solid #e0e0e0;">
-      <p><strong>Yavuli Marketplace</strong></p>
-      <p>This is an automated email. Please do not reply.</p>
-      <p>© 2026 Yavuli. All rights reserved.</p>
     </div>
   </div>
 </body>

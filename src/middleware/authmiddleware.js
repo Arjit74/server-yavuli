@@ -65,7 +65,7 @@ const authMiddleware = async (req, res, next) => {
 
 const adminMiddleware = (req, res, next) => {
   // Check if the user has the 'admin' role OR matches your specific email
-  if (req.user.role !== 'admin' && req.user.email !== 'YOUR_EMAIL@gmail.com') {
+  if (req.user.role !== 'admin' && req.user.email !== '23r01a05cu@cmrithyderabad.edu.in') {
     return res.status(403).json({ 
       success: false, 
       message: 'Access Denied: Admins Only' 
